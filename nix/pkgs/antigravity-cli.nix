@@ -8,12 +8,12 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "antigravity-cli";
-  version = "1.5.9";
-  passthru.buildId = "4515810895593472";
+  version = "1.5.11";
+  passthru.buildId = "6132547114106880";
 
   src = fetchurl {
     url = "https://storage.googleapis.com/antigravity-public/antigravity-cli/${finalAttrs.version}-${finalAttrs.passthru.buildId}/linux-x64/cli_linux_x64.tar.gz";
-    hash = "sha512-0B6xO6d1Du0YkH8a6IYIZDceCtkGRBXo0DPSK0vXubTkx/liBYUgtFLWfbHDMWPZqInVWn3/oVlZbsbNkah7eQ==";
+    hash = "sha512-2tPAFeiWT83BY5sTtxUvTLhMsb3jhXB+K83wldbxgx9PZSEZmuxJnMBS+emZBrf9vFLCc98GTVy3yEsGi6POUA==";
   };
 
   sourceRoot = ".";
