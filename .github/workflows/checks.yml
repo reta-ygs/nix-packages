@@ -1,0 +1,45 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+      - run: nix flake check --no-update-lock-file
+      - if: matrix.runner == 'ubuntu-24.04'
+        run: |
+          for test in tests/*-test.sh; do
+            bash "$test"
+          done
+
+  package-checks:
+    name: Package checks
+    if: always()
+    needs: build
+    runs-on: ubuntu-24.04
+    env:
+      RESULT: ${{ needs.build.result }}
+    steps:
+      - run: test "$RESULT" = success

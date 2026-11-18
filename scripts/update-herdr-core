@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/herdr-core.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+systems=(x86_64-linux aarch64-linux)
+targets=(linux-x86_64 linux-aarch64)
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN ]] || fail "unexpected current version: $current"
+for system in "${systems[@]}"; do
+  hash=$(sed -nE "s/^    $system = \"([^\"]+)\";$/\\1/p" "$PACKAGE")
+  [[ $hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail "missing or invalid package hash: $system"
+done
+
+metadata=$(curl -fsSL --retry 3 'https://releases.herdr.dev/core/latest.json')
+version=$(jq -er '.version | select(type == "string")' <<<"$metadata") || fail 'invalid release version'
+[[ $version =~ $VERSION_PATTERN ]] || fail "unexpected release version: $version"
+jq -e --arg version "$version" '.version == $version' <<<"$metadata" >/dev/null || fail 'invalid release version whitespace'
+urls=()
+digests=()
+for target in "${targets[@]}"; do
+  url="https://releases.herdr.dev/core/$version/herdr-core-$target.tar.gz"
+  digest=$(jq -er --arg target "$target" --arg url "$url" '
+    .targets[$target] | select(.url == $url)
+    | .sha256 | select(type == "string" and length == 64 and test("^[0-9a-f]{64}$"))
+  ' <<<"$metadata") || fail "invalid release asset: $target"
+  urls+=("$url")
+  digests+=("$digest")
+done
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$current" = "$version" ] || [ "$newest" = "$current" ]; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+hashes=()
+for i in "${!targets[@]}"; do
+  expected=$(nix hash convert --hash-algo sha256 --to sri "${digests[$i]}")
+  actual=$(nix store prefetch-file --json --hash-type sha256 "${urls[$i]}" | jq -er '.hash | select(type == "string")')
+  [[ $actual =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail "invalid downloaded hash: ${targets[$i]}"
+  [ "$actual" = "$expected" ] || fail "checksum mismatch: ${targets[$i]}"
+  hashes+=("$actual")
+done
+
+replacements=(-e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|")
+for i in "${!systems[@]}"; do
+  replacements+=(-e "s|^    ${systems[$i]} = \"[^\"]+\";$|    ${systems[$i]} = \"${hashes[$i]}\";|")
+done
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E "${replacements[@]}" "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'

@@ -1,0 +1,132 @@
+name: Update a package
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        type: string
+        required: true
+
+concurrency:
+  group: update-${{ inputs.package }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.update.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+      - name: Check for a release
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ inputs.package }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          case "$PACKAGE" in
+            antigravity-cli|gencode|genspark-cli|herdr-core|supabase-cli) ;;
+            *) exit 1 ;;
+          esac
+          open=$(gh pr list --state open --base "$BASE_BRANCH" --limit 100 \
+            --json headRefName,isCrossRepository \
+            | jq -r --arg prefix "update/$PACKAGE/" \
+              'any(.[]; (.isCrossRepository | not) and (.headRefName | startswith($prefix)))')
+          if [ "$open" = true ]; then
+            echo "An update PR for $PACKAGE is already open."
+            exit 0
+          fi
+          if [ "$PACKAGE" = genspark-cli ]; then
+            result=$(nix shell --inputs-from . nixpkgs#nodejs nixpkgs#prefetch-npm-deps \
+              -c bash scripts/update-genspark-cli)
+          else
+            result=$(bash "scripts/update-$PACKAGE")
+          fi
+          if [ "$(jq -r .update <<<"$result")" = true ]; then
+            version=$(jq -er .version <<<"$result")
+            [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-gencode\.[0-9]+)?$ ]]
+            echo "version=$version" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Build candidate and run install checks
+        if: steps.update.outputs.version != ''
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: nix build --no-update-lock-file --no-link ".#$PACKAGE"
+      - name: Record verified diff
+        if: steps.update.outputs.version != ''
+        run: git diff --binary --no-ext-diff >"$RUNNER_TEMP/update.patch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: steps.update.outputs.version != ''
+        with:
+          name: update-${{ inputs.package }}
+          path: ${{ runner.temp }}/update.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: prepare
+    if: needs.prepare.outputs.version != ''
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: update-${{ inputs.package }}
+          path: ${{ runner.temp }}/candidate
+      - name: Open validated update for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          case "$PACKAGE" in
+            antigravity-cli|gencode|genspark-cli|herdr-core|supabase-cli) ;;
+            *) exit 1 ;;
+          esac
+          [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-gencode\.[0-9]+)?$ ]]
+          recipe="nix/pkgs/$PACKAGE.nix"
+          git apply --index "$RUNNER_TEMP/candidate/update.patch"
+          expected=$(printf 'M\t%s\n' "$recipe")
+          if [ "$PACKAGE" = genspark-cli ]; then
+            expected=$(printf 'M\tnix/pkgs/genspark-cli-package-lock.json\n%s\n' "$expected")
+          fi
+          [ "$(git diff --cached --name-status --no-renames)" = "$expected" ]
+          [ -z "$(git diff --cached --summary)" ]
+          git diff --cached --check
+          [ "$(git ls-remote origin "refs/heads/$BASE_BRANCH" | cut -f 1)" = "$GITHUB_SHA" ]
+          branch="update/$PACKAGE/$VERSION"
+          git switch -c "$branch"
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "chore(deps): update $PACKAGE to $VERSION"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create --base "$BASE_BRANCH" --head "$branch" \
+            --title "chore(deps): update $PACKAGE to $VERSION" \
+            --body "Verified the upstream artifact checksums and passed the Linux x86_64 Nix build and install checks. The Package checks workflow covers the other supported systems before merge."
+      - name: Run checks on the bot branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: gh workflow run checks.yml --ref "update/$PACKAGE/$VERSION"

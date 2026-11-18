@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/gencode.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-gencode\.(0|[1-9][0-9]*)$'
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+current_hash=$(sed -nE 's/^    hash = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN ]] || fail "unexpected current version: $current"
+[[ $current_hash =~ ^sha(256-[A-Za-z0-9+/]{43}=|512-[A-Za-z0-9+/]{86}==)$ ]] || fail 'missing or invalid package hash'
+
+metadata=$(curl -fsSL --retry 3 'https://registry.npmjs.org/@genspark%2fgencode-linux-x64-baseline/latest')
+version=$(jq -er '.version | select(type == "string")' <<<"$metadata") || fail 'invalid registry version'
+[[ $version =~ $VERSION_PATTERN ]] || fail "unexpected registry version: $version"
+url="https://registry.npmjs.org/@genspark/gencode-linux-x64-baseline/-/gencode-linux-x64-baseline-$version.tgz"
+integrity=$(jq -er --arg url "$url" '
+  select(.name == "@genspark/gencode-linux-x64-baseline" and .dist.tarball == $url)
+  | .dist.integrity | select(type == "string" and test("^sha512-[A-Za-z0-9+/]{86}==$"))
+' <<<"$metadata") || fail 'invalid registry tarball or integrity'
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$current" = "$version" ] || [ "$newest" = "$current" ]; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+actual=$(nix store prefetch-file --json --hash-type sha512 "$url" | jq -er .hash)
+[ "$actual" = "$integrity" ] || fail "integrity mismatch: registry=$integrity fetched=$actual"
+
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E \
+  -e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|" \
+  -e "s|^    hash = \"[^\"]+\";$|    hash = \"$actual\";|" \
+  "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/genspark-cli.nix"}
+LOCKFILE=${2:-"$(dirname "$PACKAGE")/genspark-cli-package-lock.json"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+current_hash=$(sed -nE 's/^    hash = "([^"]+)";$/\1/p' "$PACKAGE")
+current_deps=$(sed -nE 's/^  npmDepsHash = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN && $current_hash =~ ^sha512-[A-Za-z0-9+/]{86}==$ && $current_deps =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] \
+  || fail 'invalid package pin'
+jq -e --arg version "$current" '.name == "@genspark/cli" and .version == $version' "$LOCKFILE" >/dev/null \
+  || fail 'lockfile does not match the package pin'
+
+metadata=$(curl -fsSL --retry 3 'https://registry.npmjs.org/@genspark%2fcli/latest')
+version=$(jq -er '.version | select(type == "string")' <<<"$metadata")
+[[ $version =~ $VERSION_PATTERN ]] || fail "unexpected registry version: $version"
+url="https://registry.npmjs.org/@genspark/cli/-/cli-$version.tgz"
+integrity=$(jq -er --arg url "$url" --arg version "$version" '
+  select(.name == "@genspark/cli" and .version == $version and .dist.tarball == $url)
+  | .dist.integrity | select(type == "string" and test("^sha512-[A-Za-z0-9+/]{86}==\\z"))
+' <<<"$metadata") || fail 'invalid registry tarball or integrity'
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$newest" = "$current" ]; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+fetched=$(nix store prefetch-file --json --hash-type sha512 "$url")
+actual=$(jq -er .hash <<<"$fetched")
+[ "$actual" = "$integrity" ] || fail 'tarball integrity mismatch'
+store_path=$(jq -er .storePath <<<"$fetched")
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+tar -xOzf "$store_path" package/package.json >"$work/package.json"
+jq -e --arg version "$version" '.name == "@genspark/cli" and .version == $version' "$work/package.json" >/dev/null \
+  || fail 'tarball package.json does not match the release'
+(
+  cd "$work"
+  npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org >&2
+)
+jq -e --arg version "$version" '.name == "@genspark/cli" and .version == $version' "$work/package-lock.json" >/dev/null
+deps=$(prefetch-npm-deps "$work/package-lock.json")
+[[ $deps =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail 'invalid npmDepsHash'
+sed -E \
+  -e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|" \
+  -e "s|^    hash = \"[^\"]+\";$|    hash = \"$actual\";|" \
+  -e "s|^  npmDepsHash = \"[^\"]+\";$|  npmDepsHash = \"$deps\";|" \
+  "$PACKAGE" >"$work/package.nix"
+install -m 644 "$work/package-lock.json" "$LOCKFILE"
+install -m 644 "$work/package.nix" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'

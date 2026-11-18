@@ -1,0 +1,29 @@
+name: Update packages
+
+on:
+  schedule:
+    - cron: '23 16 * * *'
+  workflow_dispatch:
+    inputs:
+      package:
+        type: choice
+        default: all
+        options: [all, antigravity-cli, gencode, genspark-cli, herdr-core, supabase-cli]
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    if: github.ref_name == github.event.repository.default_branch
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(inputs.package && inputs.package != 'all' && format('["{0}"]', inputs.package) || '["antigravity-cli", "gencode", "genspark-cli", "herdr-core", "supabase-cli"]') }}
+    uses: ./.github/workflows/update-package.yml
+    with:
+      package: ${{ matrix.package }}

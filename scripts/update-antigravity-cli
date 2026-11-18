@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/antigravity-cli.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+current_build=$(sed -nE 's/^  passthru\.buildId = "([^"]+)";$/\1/p' "$PACKAGE")
+current_hash=$(sed -nE 's/^    hash = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN && $current_build =~ ^[0-9]+$ && $current_hash =~ ^sha512-[A-Za-z0-9+/]{86}==$ ]] \
+  || fail 'invalid package pin'
+
+manifest=$(curl -fsSL --retry 3 'https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json')
+version=$(jq -er '.version | select(type == "string")' <<<"$manifest")
+[[ $version =~ $VERSION_PATTERN ]] || fail "unexpected release version: $version"
+url=$(jq -er --arg version "$version" 'select(.version == $version) | .url | select(type == "string")' <<<"$manifest")
+prefix="https://storage.googleapis.com/antigravity-public/antigravity-cli/$version-"
+suffix='/linux-x64/cli_linux_x64.tar.gz'
+build=${url#"$prefix"}
+build=${build%"$suffix"}
+[[ $build =~ ^[0-9]+$ && $url == "$prefix$build$suffix" ]] || fail 'unexpected release asset URL'
+digest=$(jq -er --arg url "$url" '
+  select(.url == $url) | .sha512 | select(type == "string" and test("^[0-9a-f]{128}\\z"))
+' <<<"$manifest")
+expected=$(nix hash convert --hash-algo sha512 --to sri "$digest")
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$current" = "$version" ] && [ "$current_build" = "$build" ]; then
+  [ "$current_hash" = "$expected" ] || fail 'pinned release checksum changed'
+fi
+if [ "$newest" = "$current" ] && { [ "$current" != "$version" ] || [ "$current_build" = "$build" ]; }; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+actual=$(nix store prefetch-file --json --hash-type sha512 "$url" | jq -er .hash)
+[ "$actual" = "$expected" ] || fail 'checksum mismatch'
+
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E \
+  -e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|" \
+  -e "s|^  passthru\.buildId = \"[^\"]+\";$|  passthru.buildId = \"$build\";|" \
+  -e "s|^    hash = \"[^\"]+\";$|    hash = \"$actual\";|" \
+  "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'
