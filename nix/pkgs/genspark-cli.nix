@@ -5,18 +5,18 @@
 }:
 buildNpmPackage (finalAttrs: {
   pname = "genspark-cli";
-  version = "1.14.1";
+  version = "1.16.2";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@genspark/cli/-/cli-${finalAttrs.version}.tgz";
-    hash = "sha512-7f4Y2nqhWxE1mkp/D14fs/BGdRvcMbZNxUfoe0jdUrKCIXZcYED5+K4Zoi1C3pRVQKEhqj23yDLY/6TybQ0+Cw==";
+    hash = "sha512-CaEspyHcM2ebsldeHM9p+CSUn99HJAbmi0M5hZk2MNIHLlvgPADH22ZjL4T704e0cy0HAIHr3DzYjlx3bDi2Lw==";
   };
 
   postPatch = ''
     cp ${./genspark-cli-package-lock.json} package-lock.json
   '';
 
-  npmDepsHash = "sha256-PrX4NqbKtk4YkiDHb1M2GYqKCW0Jvrlhm7fLgxmR9PQ=";
+  npmDepsHash = "sha256-ShKlOq0i4GQ37UXYjj36unhC8GM8d3fOL/amKS3t45I=";
   npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
 
