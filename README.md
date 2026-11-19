@@ -44,10 +44,15 @@ This is a public, maintainer-operated repository, not an open contribution proje
 Pull request creation is restricted to collaborators, and Issues, Discussions, Wiki, and Projects are disabled.
 Public read access and forks remain available.
 
-**Checks** runs only on branch pushes within this repository or a maintainer's manual dispatch, not on pull request events.
+**Checks** runs only on branch pushes within this repository or authorized manual/API dispatches, including trusted update automation, not on pull request events.
 Opening or updating a fork pull request does not trigger CI in this repository.
-All external contributors require workflow approval as a fallback, and third-party Actions must be pinned to full commit SHAs.
+Third-party Actions must be pinned to full commit SHAs.
 The `main` branch protection applies to administrators, requires up-to-date **Package checks**, and forbids force pushes and branch deletion.
+
+Human write/admin access is reserved for the repository owner; untrusted contributors must not receive write access.
+Any GitHub App or workflow granted write permissions is also trusted automation.
+The external-contributor approval policy applies to fork pull request workflows only, not same-repository pushes or manual dispatches.
+A repository writer can change branch workflows and request additional token permissions; branch-local actor checks and read-only permission declarations do not isolate an untrusted writer.
 
 Package update preparation has read-only repository access and runs separately from publication.
 The publication job has write permissions to create an update branch and PR and dispatch checks, but does not execute the candidate package.
