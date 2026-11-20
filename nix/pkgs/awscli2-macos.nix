@@ -2,6 +2,7 @@
   lib,
   stdenvNoCC,
   fetchurl,
+  xar,
   libarchive,
   jq,
   versionCheckHook,
@@ -15,12 +16,14 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-vkj5gwS9ewQ5IaVhziwyPIGZc4HMrPyjlpptz4anDgM=";
   };
 
-  nativeBuildInputs = [ libarchive ];
+  nativeBuildInputs = [
+    xar
+    libarchive
+  ];
   unpackPhase = ''
     runHook preUnpack
-    bsdtar -xOf "$src" aws-cli.pkg/Payload > payload.cpio.gz
-    bsdtar -xf payload.cpio.gz
-    bsdtar -xOf "$src" Resources/LICENSE.txt > LICENSE.txt
+    xar -xf "$src"
+    bsdtar -xf aws-cli.pkg/Payload
     runHook postUnpack
   '';
   dontBuild = true;
@@ -30,7 +33,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
     mkdir -p "$out/bin" "$out/libexec" "$out/share/licenses/awscli2-macos"
     mv aws-cli "$out/libexec/"
-    install -m 644 LICENSE.txt "$out/share/licenses/awscli2-macos/"
+    install -m 644 Resources/LICENSE.txt "$out/share/licenses/awscli2-macos/"
     ln -s ../libexec/aws-cli/aws "$out/bin/aws"
     ln -s ../libexec/aws-cli/aws_completer "$out/bin/aws_completer"
     runHook postInstall
