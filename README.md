@@ -31,14 +31,27 @@ Update the `nix-packages` flake lock entry with `nix flake update nix-packages` 
 ## Updates
 
 The **Update packages** workflow checks each upstream daily and can also be run for a single package.
-It verifies the new download and runs a native build and install checks before opening a PR.
-For `awscli2-macos`, the macOS runner verifies the Apple Developer ID signature against the AWS team ID and checks that the packaged CLI recognizes `GetScopedCredentials` without contacting AWS.
+For Linux packages, the workflow verifies the new download and runs a native build and install checks before opening a PR.
+For `awscli2-macos`, Linux CI checks the pinned archive hash, extracts the installer without executing it, checks for arm64 executables, and inspects the bundled `GetScopedCredentials` command model.
 Genspark CLI updates also regenerate its npm lockfile and Nix dependency hash without running npm install scripts.
 The repository requires **Package checks** against the current `main` before merge; a failed update does not affect consumers until a new revision is merged and selected in their lockfile.
 Package update PRs are merged manually.
 The update workflow explicitly dispatches **Checks** on its branch because pushes made with `GITHUB_TOKEN` do not trigger push workflows.
 Maintainers can rerun **Checks** on an update branch if its check run is missing.
 If `main` has advanced, first update the branch with the latest `main`, then run **Checks** on the new head; rerunning checks on a stale head is not sufficient.
+
+### Verify an AWS CLI candidate on macOS
+
+Before merging any change to `awscli2-macos`, check out the candidate on an Apple Silicon Mac and run:
+
+```sh
+installer=$(nix build --no-update-lock-file --no-link --print-out-paths .#awscli2-macos.src)
+bash scripts/verify-awscli2-macos "$installer" && nix build --no-update-lock-file --no-link .#awscli2-macos
+```
+
+The first check verifies the Apple Developer ID signature against the AWS team ID.
+The Nix build runs `aws --version` and checks that the packaged CLI recognizes `GetScopedCredentials`, without using AWS credentials or calling the service.
+Linux CI does not replace these checks.
 
 ## Repository security
 

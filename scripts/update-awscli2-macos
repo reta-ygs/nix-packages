@@ -28,11 +28,8 @@ if jq -en --arg version "$version" --arg current "$current" '
 fi
 
 url="https://awscli.amazonaws.com/AWSCLIV2-$version.pkg"
-artifact=$(nix store prefetch-file --json "$url")
-path=$(jq -er --arg suffix "-AWSCLIV2-$version.pkg" '.storePath | strings | select(startswith("/") and endswith($suffix))' <<<"$artifact")
-hash=$(jq -er .hash <<<"$artifact")
+hash=$(nix store prefetch-file --json "$url" | jq -er .hash)
 [[ $hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail 'invalid downloaded hash'
-bash "$ROOT/scripts/verify-awscli2-macos" "$path"
 
 tmp=$(mktemp "$PACKAGE.XXXXXX")
 trap 'rm -f "$tmp"' EXIT

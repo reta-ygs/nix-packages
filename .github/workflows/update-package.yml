@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    runs-on: ${{ inputs.package == 'awscli2-macos' && 'macos-15' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs:
       version: ${{ steps.update.outputs.version }}
@@ -63,7 +63,12 @@ jobs:
         if: steps.update.outputs.version != ''
         env:
           PACKAGE: ${{ inputs.package }}
-        run: nix build --no-update-lock-file --no-link ".#$PACKAGE"
+        run: |
+          if [ "$PACKAGE" = awscli2-macos ]; then
+            nix build --no-update-lock-file --no-link '.#checks.x86_64-linux.awscli2-macos-archive'
+          else
+            nix build --no-update-lock-file --no-link ".#$PACKAGE"
+          fi
       - name: Record verified diff
         if: steps.update.outputs.version != ''
         run: git diff --binary --no-ext-diff >"$RUNNER_TEMP/update.patch"
@@ -122,7 +127,7 @@ jobs:
           gh auth setup-git
           git push origin "HEAD:refs/heads/$branch"
           if [ "$PACKAGE" = awscli2-macos ]; then
-            verification='Verified the AWS Apple Developer ID signature and passed the macOS aarch64 Nix build and install checks.'
+            verification='Linux verified the pinned archive hash, extraction, arm64 executables, and STS command model. Before merging, follow the README to verify the installer signature and run the install checks on an Apple Silicon Mac.'
           else
             verification='Verified the upstream artifact checksums and passed the Linux x86_64 Nix build and install checks.'
           fi

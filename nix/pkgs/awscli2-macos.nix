@@ -7,6 +7,12 @@
   jq,
   versionCheckHook,
 }:
+let
+  unpackInstaller = ''
+    xar -xf "$src"
+    bsdtar -xf aws-cli.pkg/Payload
+  '';
+in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "awscli2-macos";
   version = "2.41.2";
@@ -20,10 +26,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     xar
     libarchive
   ];
+  passthru = { inherit unpackInstaller; };
   unpackPhase = ''
     runHook preUnpack
-    xar -xf "$src"
-    bsdtar -xf aws-cli.pkg/Payload
+    ${unpackInstaller}
     runHook postUnpack
   '';
   dontBuild = true;

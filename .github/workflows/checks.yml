@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     steps:
@@ -26,10 +26,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
-      - if: matrix.runner == 'macos-15'
-        run: |
-          installer=$(nix build --no-update-lock-file --no-link --print-out-paths '.#awscli2-macos.src')
-          bash scripts/verify-awscli2-macos "$installer"
       - run: nix flake check --no-update-lock-file
       - if: matrix.runner == 'ubuntu-24.04'
         run: |
