@@ -37,7 +37,7 @@ jobs:
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           case "$PACKAGE" in
-            antigravity-cli|gencode|genspark-cli|herdr-core|supabase-cli) ;;
+            antigravity-cli|awscli2-macos|gencode|genspark-cli|herdr-core|supabase-cli) ;;
             *) exit 1 ;;
           esac
           open=$(gh pr list --state open --base "$BASE_BRANCH" --limit 100 \
@@ -63,7 +63,12 @@ jobs:
         if: steps.update.outputs.version != ''
         env:
           PACKAGE: ${{ inputs.package }}
-        run: nix build --no-update-lock-file --no-link ".#$PACKAGE"
+        run: |
+          if [ "$PACKAGE" = awscli2-macos ]; then
+            nix build --no-update-lock-file --no-link '.#checks.x86_64-linux.awscli2-macos-archive'
+          else
+            nix build --no-update-lock-file --no-link ".#$PACKAGE"
+          fi
       - name: Record verified diff
         if: steps.update.outputs.version != ''
         run: git diff --binary --no-ext-diff >"$RUNNER_TEMP/update.patch"
@@ -100,7 +105,7 @@ jobs:
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           case "$PACKAGE" in
-            antigravity-cli|gencode|genspark-cli|herdr-core|supabase-cli) ;;
+            antigravity-cli|awscli2-macos|gencode|genspark-cli|herdr-core|supabase-cli) ;;
             *) exit 1 ;;
           esac
           [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-gencode\.[0-9]+)?$ ]]
@@ -121,9 +126,14 @@ jobs:
             commit -m "chore(deps): update $PACKAGE to $VERSION"
           gh auth setup-git
           git push origin "HEAD:refs/heads/$branch"
+          if [ "$PACKAGE" = awscli2-macos ]; then
+            verification='Linux verified the pinned archive hash, extraction, arm64 executables, and STS command model. Before merging, follow the README to verify the installer signature and run the install checks on an Apple Silicon Mac.'
+          else
+            verification='Verified the upstream artifact checksums and passed the Linux x86_64 Nix build and install checks.'
+          fi
           gh pr create --base "$BASE_BRANCH" --head "$branch" \
             --title "chore(deps): update $PACKAGE to $VERSION" \
-            --body "Verified the upstream artifact checksums and passed the Linux x86_64 Nix build and install checks. The Package checks workflow covers the other supported systems before merge."
+            --body "$verification The Package checks workflow covers the supported systems before merge."
       - name: Run checks on the bot branch
         env:
           GH_TOKEN: ${{ github.token }}

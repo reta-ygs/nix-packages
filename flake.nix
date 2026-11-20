@@ -29,6 +29,9 @@
         {
           genspark-cli = pkgs.callPackage ./nix/pkgs/genspark-cli.nix { };
         }
+        // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+          awscli2-macos = pkgs.callPackage ./nix/pkgs/awscli2-macos.nix { };
+        }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           herdr-core = pkgs.callPackage ./nix/pkgs/herdr-core.nix { };
         }
@@ -38,7 +41,18 @@
           supabase-cli = pkgs.callPackage ./nix/pkgs/supabase-cli.nix { };
         }
       );
-      checks = self.packages;
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        self.packages.${system}
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          awscli2-macos-archive = pkgs.callPackage ./nix/tests/awscli2-macos-archive.nix {
+            awscli2-macos = self.packages.aarch64-darwin.awscli2-macos;
+          };
+        }
+      );
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
     };
 }

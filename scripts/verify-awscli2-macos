@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ $# == 1 && -f $1 ]] || { printf 'A macOS installer package is required\n' >&2; exit 1; }
+
+signature=$(LC_ALL=C pkgutil --check-signature "$1")
+if ! grep -Fq 'signed by a developer certificate issued by Apple for distribution' <<<"$signature" ||
+   ! grep -Eq '^[[:space:]]*1\.[[:space:]]+Developer ID Installer: .+ \(94KV3E626L\)[[:space:]]*$' <<<"$signature"; then
+  printf 'Expected a trusted Apple Developer ID Installer signature from AWS team 94KV3E626L\n' >&2
+  exit 1
+fi
