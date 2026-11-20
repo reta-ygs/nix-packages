@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/awscli2-macos.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+current_hash=$(sed -nE 's/^    hash = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN && $current_hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] \
+  || fail 'invalid AWS CLI package pin'
+
+version=$(gh api 'repos/aws/aws-cli/tags?per_page=100' | jq -er --arg pattern "$VERSION_PATTERN" '
+  map(.name | strings | select(test($pattern)))
+  | max_by(split(".") | map(tonumber))
+')
+[[ $version =~ $VERSION_PATTERN ]] || fail 'invalid AWS CLI release tag'
+if jq -en --arg version "$version" --arg current "$current" '
+  ($version | split(".") | map(tonumber)) <= ($current | split(".") | map(tonumber))
+' >/dev/null; then
+  jq -nc --arg version "$version" '{update: false, version: $version}'
+  exit 0
+fi
+
+url="https://awscli.amazonaws.com/AWSCLIV2-$version.pkg"
+artifact=$(nix store prefetch-file --json "$url")
+path=$(jq -er --arg suffix "-AWSCLIV2-$version.pkg" '.storePath | strings | select(startswith("/") and endswith($suffix))' <<<"$artifact")
+hash=$(jq -er .hash <<<"$artifact")
+[[ $hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail 'invalid downloaded hash'
+bash "$ROOT/scripts/verify-awscli2-macos" "$path"
+
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E \
+  -e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|" \
+  -e "s|^    hash = \"[^\"]+\";$|    hash = \"$hash\";|" \
+  "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'

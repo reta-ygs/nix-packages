@@ -29,6 +29,9 @@
         {
           genspark-cli = pkgs.callPackage ./nix/pkgs/genspark-cli.nix { };
         }
+        // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+          awscli2-macos = pkgs.callPackage ./nix/pkgs/awscli2-macos.nix { };
+        }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           herdr-core = pkgs.callPackage ./nix/pkgs/herdr-core.nix { };
         }

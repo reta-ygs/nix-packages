@@ -6,6 +6,7 @@ This repository publishes Nix definitions, not binaries.
 | Package | Systems | Upstream metadata |
 | --- | --- | --- |
 | `antigravity-cli` | Linux x86_64 | Google Antigravity updater manifest |
+| `awscli2-macos` | macOS aarch64 | AWS CLI Git tags and Apple-signed AWS installer |
 | `gencode` | Linux x86_64 | npm `@genspark/gencode-linux-x64-baseline` |
 | `genspark-cli` | Linux x86_64/aarch64 and macOS aarch64 | npm `@genspark/cli` |
 | `herdr-core` | Linux x86_64 and aarch64 | herdr-core release manifest |
@@ -30,7 +31,8 @@ Update the `nix-packages` flake lock entry with `nix flake update nix-packages` 
 ## Updates
 
 The **Update packages** workflow checks each upstream daily and can also be run for a single package.
-It verifies the new download against upstream metadata and runs an x86_64 Linux build and install checks before opening a PR.
+It verifies the new download and runs a native build and install checks before opening a PR.
+For `awscli2-macos`, the macOS runner verifies the Apple Developer ID signature against the AWS team ID and checks that the packaged CLI recognizes `GetScopedCredentials` without contacting AWS.
 Genspark CLI updates also regenerate its npm lockfile and Nix dependency hash without running npm install scripts.
 The repository requires **Package checks** against the current `main` before merge; a failed update does not affect consumers until a new revision is merged and selected in their lockfile.
 Package update PRs are merged manually.

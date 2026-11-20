@@ -1,0 +1,64 @@
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  libarchive,
+  jq,
+  versionCheckHook,
+}:
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "awscli2-macos";
+  version = "2.41.2";
+
+  src = fetchurl {
+    url = "https://awscli.amazonaws.com/AWSCLIV2-${finalAttrs.version}.pkg";
+    hash = "sha256-vkj5gwS9ewQ5IaVhziwyPIGZc4HMrPyjlpptz4anDgM=";
+  };
+
+  nativeBuildInputs = [ libarchive ];
+  unpackPhase = ''
+    runHook preUnpack
+    bsdtar -xOf "$src" aws-cli.pkg/Payload > payload.cpio.gz
+    bsdtar -xf payload.cpio.gz
+    bsdtar -xOf "$src" Resources/LICENSE.txt > LICENSE.txt
+    runHook postUnpack
+  '';
+  dontBuild = true;
+  dontFixup = true;
+
+  installPhase = ''
+    runHook preInstall
+    mkdir -p "$out/bin" "$out/libexec" "$out/share/licenses/awscli2-macos"
+    mv aws-cli "$out/libexec/"
+    install -m 644 LICENSE.txt "$out/share/licenses/awscli2-macos/"
+    ln -s ../libexec/aws-cli/aws "$out/bin/aws"
+    ln -s ../libexec/aws-cli/aws_completer "$out/bin/aws_completer"
+    runHook postInstall
+  '';
+
+  nativeInstallCheckInputs = [
+    versionCheckHook
+    jq
+  ];
+  doInstallCheck = true;
+  versionCheckProgram = "${placeholder "out"}/bin/aws";
+  versionCheckProgramArg = "--version";
+  preInstallCheck = ''
+    export HOME=$(mktemp -d)
+    export AWS_CONFIG_FILE="$HOME/config" AWS_SHARED_CREDENTIALS_FILE="$HOME/credentials"
+    export AWS_EC2_METADATA_DISABLED=true
+  '';
+  postInstallCheck = ''
+    "$out/bin/aws" --no-cli-pager sts get-scoped-credentials --generate-cli-skeleton input \
+      | jq -e 'has("Policy") and has("DurationSeconds")' >/dev/null
+  '';
+
+  meta = {
+    description = "AWS Command Line Interface v2 from the official macOS distribution";
+    homepage = "https://aws.amazon.com/cli/";
+    license = lib.licenses.asl20;
+    sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
+    platforms = [ "aarch64-darwin" ];
+    mainProgram = "aws";
+  };
+})
