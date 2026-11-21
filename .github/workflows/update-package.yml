@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    runs-on: ubuntu-24.04
+    runs-on: ${{ contains(fromJSON('["awscli2-macos", "genspark-cli", "herdr-core"]'), inputs.package) && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 35
     outputs:
       version: ${{ steps.update.outputs.version }}
@@ -65,7 +65,7 @@ jobs:
           PACKAGE: ${{ inputs.package }}
         run: |
           if [ "$PACKAGE" = awscli2-macos ]; then
-            nix build --no-update-lock-file --no-link '.#checks.x86_64-linux.awscli2-macos-archive'
+            nix build --no-update-lock-file --no-link '.#checks.aarch64-linux.awscli2-macos-archive'
           else
             nix build --no-update-lock-file --no-link ".#$PACKAGE"
           fi
@@ -87,7 +87,7 @@ jobs:
       contents: write
       pull-requests: write
       actions: write
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -129,7 +129,7 @@ jobs:
           if [ "$PACKAGE" = awscli2-macos ]; then
             verification='Linux verified the pinned archive hash, extraction, arm64 executables, and STS command model. Before merging, follow the README to verify the installer signature and run the install checks on an Apple Silicon Mac.'
           else
-            verification='Verified the upstream artifact checksums and passed the Linux x86_64 Nix build and install checks.'
+            verification='Verified the upstream artifact checksums and passed the native Linux Nix build and install checks.'
           fi
           gh pr create --base "$BASE_BRANCH" --head "$branch" \
             --title "chore(deps): update $PACKAGE to $VERSION" \
