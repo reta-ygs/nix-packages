@@ -15,11 +15,11 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "awscli2-macos";
-  version = "2.41.2";
+  version = "2.42.1";
 
   src = fetchurl {
     url = "https://awscli.amazonaws.com/AWSCLIV2-${finalAttrs.version}.pkg";
-    hash = "sha256-vkj5gwS9ewQ5IaVhziwyPIGZc4HMrPyjlpptz4anDgM=";
+    hash = "sha256-dOOKuKWStjXXsK6F5vM8sc66ec4ZwRLUJcu/U15geyM=";
   };
 
   nativeBuildInputs = [
