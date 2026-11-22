@@ -4,6 +4,7 @@
   fetchurl,
   autoPatchelfHook,
   makeWrapper,
+  jq,
   stdenv,
   zlib,
   openssl,
@@ -21,6 +22,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     autoPatchelfHook
     makeWrapper
+    jq
   ];
   buildInputs = [
     stdenv.cc.cc.lib
@@ -30,6 +32,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   dontConfigure = true;
   dontBuild = true;
   dontStrip = true;
+  dontAutoPatchelf = true;
 
   installPhase = ''
     runHook preInstall
@@ -43,11 +46,26 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
 
+  postFixup = ''
+    autoPatchelf "$out"
+    runtime_hash=$(tr -d '\r\n' < "$out/libexec/orca-server/orcad/.runtime-node")
+    node_bin="$out/libexec/orca-server/runtimes/node-$runtime_hash/bin/node"
+    preflight_json=$(HOME=$(mktemp -d) "$node_bin" "$out/libexec/orca-server/orcad/orcad-server.js" --orcad-startup-preflight 00000000-0000-4000-8000-000000000001)
+    artifact_version=$(jq -er '.artifactVersion' <<<"$preflight_json")
+    printf '%s\n' "$artifact_version" > "$out/libexec/orca-server/orcad/.version"
+  '';
+
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
     export HOME=$(mktemp -d)
     "$out/bin/orca-ide" --help > /dev/null
+    runtime_hash=$(tr -d '\r\n' < "$out/libexec/orca-server/orcad/.runtime-node")
+    node_bin="$out/libexec/orca-server/runtimes/node-$runtime_hash/bin/node"
+    preflight_json=$("$node_bin" "$out/libexec/orca-server/orcad/orcad-server.js" --orcad-startup-preflight 00000000-0000-4000-8000-000000000002)
+    actual_artifact=$(jq -er '.artifactVersion' <<<"$preflight_json")
+    expected_artifact=$(tr -d '\r\n' < "$out/libexec/orca-server/orcad/.version")
+    [ "$actual_artifact" = "$expected_artifact" ]
     runHook postInstallCheck
   '';
 
