@@ -39,7 +39,6 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     makeWrapper "$out/libexec/orca-server/bin/orca-ide" "$out/bin/orca-ide" \
       --prefix PATH : "${lib.makeBinPath [ coreutils ]}"
-    ln -s orca-ide "$out/bin/orca"
 
     runHook postInstall
   '';
@@ -49,12 +48,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstallCheck
     export HOME=$(mktemp -d)
     "$out/bin/orca-ide" --help > /dev/null
-    "$out/bin/orca" --help > /dev/null
     runHook postInstallCheck
   '';
 
   meta = {
-    description = "Orca headless server and CLI (orca-ide / orca)";
+    description = "Orca headless server and CLI (orca-ide)";
     homepage = "https://orca.dev";
     license = lib.licenses.mit;
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
