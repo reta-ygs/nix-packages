@@ -8,7 +8,7 @@ on:
       package:
         type: choice
         default: all
-        options: [all, antigravity-cli, awscli2-macos, gencode, genspark-cli, herdr-core, supabase-cli]
+        options: [all, antigravity-cli, awscli2-macos, gencode, genspark-cli, herdr-core, orca-server, supabase-cli]
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJSON(inputs.package && inputs.package != 'all' && format('["{0}"]', inputs.package) || '["antigravity-cli", "awscli2-macos", "gencode", "genspark-cli", "herdr-core", "supabase-cli"]') }}
+        package: ${{ fromJSON(inputs.package && inputs.package != 'all' && format('["{0}"]', inputs.package) || '["antigravity-cli", "awscli2-macos", "gencode", "genspark-cli", "herdr-core", "orca-server", "supabase-cli"]') }}
     uses: ./.github/workflows/update-package.yml
     with:
       package: ${{ matrix.package }}

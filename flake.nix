@@ -38,6 +38,7 @@
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           antigravity-cli = pkgs.callPackage ./nix/pkgs/antigravity-cli.nix { };
           gencode = pkgs.callPackage ./nix/pkgs/gencode.nix { };
+          orca-server = pkgs.callPackage ./nix/pkgs/orca-server.nix { };
           supabase-cli = pkgs.callPackage ./nix/pkgs/supabase-cli.nix { };
         }
       );
