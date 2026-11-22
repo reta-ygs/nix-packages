@@ -12,11 +12,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "orca-server";
-  version = "1.4.269";
+  version = "1.4.271";
 
   src = fetchurl {
     url = "https://github.com/stablyai/orca/releases/download/v${finalAttrs.version}/orca-server-linux-x64.tar.gz";
-    hash = "sha256-8oFWwM7anQNNnFXif1wLc/ON5w5OyLS6jXQMAPJtDnQ=";
+    hash = "sha256-pqbj06nsExdAoVZ53zR8uEgMfFjAVoesDdWXiGUSN2U=";
   };
 
   nativeBuildInputs = [
