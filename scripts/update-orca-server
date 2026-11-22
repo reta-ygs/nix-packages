@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/orca-server.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+current_hash=$(sed -nE 's/^    hash = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN ]] || fail "unexpected current version: $current"
+[[ $current_hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail 'missing or invalid package hash'
+
+release=$(gh api repos/stablyai/orca/releases/latest)
+jq -e '.draft == false and .prerelease == false' <<<"$release" >/dev/null \
+  || fail 'latest release is not stable'
+tag=$(jq -er .tag_name <<<"$release")
+version=${tag#v}
+[[ $tag == "v$version" && $version =~ $VERSION_PATTERN ]] \
+  || fail "unexpected release tag: $tag"
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$current" = "$version" ] || [ "$newest" = "$current" ]; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+asset="orca-server-linux-x64.tar.gz"
+url="https://github.com/stablyai/orca/releases/download/v$version/$asset"
+digest=$(jq -er --arg name "$asset" --arg url "$url" '
+  [.assets[] | select(.name == $name)]
+  | if length == 1 then .[0] else error("missing or duplicate asset: " + $name) end
+  | select(.browser_download_url == $url)
+  | .digest
+  | select(test("^sha256:[0-9a-f]{64}$"))
+' <<<"$release") || fail "invalid release asset: $asset"
+expected=$(nix hash convert --hash-algo sha256 --to sri "${digest#sha256:}")
+actual=$(nix store prefetch-file --json "$url" | jq -er .hash)
+[[ $actual =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail 'invalid downloaded hash'
+[ "$actual" = "$expected" ] || fail "checksum mismatch: $asset"
+
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E \
+  -e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|" \
+  -e "s|^    hash = \"[^\"]+\";$|    hash = \"$actual\";|" \
+  "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'
