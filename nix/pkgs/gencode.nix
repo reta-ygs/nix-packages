@@ -8,11 +8,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "gencode";
-  version = "1.19.5-gencode.1";
+  version = "1.19.5-gencode.2";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@genspark/gencode-linux-x64-baseline/-/gencode-linux-x64-baseline-${finalAttrs.version}.tgz";
-    hash = "sha512-T6kf85XL01BnfLrosEi6bEMCTaidhOO2bdR6M8XCRTzEDprDJINkU1spiDG6oqp0JpOZZHZChsKt0vV9FIi1DQ==";
+    hash = "sha512-O9ScTJlkUYQR05T0mxwOojH+IUoWdmhZCnAf3fwWa7RPqiG0ur6O+z/hMncvZj/QHNpiXdbKX+zbV/9yoPVPNw==";
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];
