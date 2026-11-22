@@ -5,10 +5,10 @@
   versionCheckHook,
 }:
 let
-  version = "0.1.21";
+  version = "0.1.22";
   hashes = {
-    x86_64-linux = "sha256-eEJHVcEKQN3jigvbVcIKwZcG6a4F7Wj8Ks8fz/DZQcE=";
-    aarch64-linux = "sha256-6ESiv6tIoiYJdnnQdryDBC/lf8zvU4fvgC5bJOeLUpo=";
+    x86_64-linux = "sha256-MFTsOZLOgMVxXXIcqp3O+mBWch0V3BE/R1CvznY7pd8=";
+    aarch64-linux = "sha256-mHV5hSRdRfjXPdheaLE5t/FnwoSIu4nt2YNMP1pc9M8=";
   };
   system = stdenvNoCC.hostPlatform.system;
   target =
