@@ -8,11 +8,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "supabase-cli";
-  version = "3.2.0";
+  version = "3.3.0";
 
   src = fetchurl {
     url = "https://github.com/supabase/cli/releases/download/v${finalAttrs.version}/supabase_${finalAttrs.version}_linux_amd64.tar.gz";
-    hash = "sha256-+4ixdagXVjUFvgLGCHIGC8uNXIaaGqVlbq6whdSi8eQ=";
+    hash = "sha256-jRJzGuUiqPJjFwynGbM/Fj3QX0NlrmwisxcU36HpK5s=";
   };
 
   sourceRoot = ".";
