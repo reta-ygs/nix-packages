@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PACKAGE=${1:-"$ROOT/nix/pkgs/genteam-computer.nix"}
+VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+POINTER_BASE='https://gensparkpublicblob.blob.core.windows.net/releases/genteam-computer'
+RELEASE_BASE='https://cdn1.genspark.ai/releases/genteam-computer'
+systems=(x86_64-linux aarch64-linux aarch64-darwin)
+targets=(linux-x64 linux-arm64 darwin-arm64)
+
+fail() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+current=$(sed -nE 's/^  version = "([^"]+)";$/\1/p' "$PACKAGE")
+[[ $current =~ $VERSION_PATTERN ]] || fail "unexpected current version: $current"
+for system in "${systems[@]}"; do
+  hash=$(sed -nE "s/^    $system = \"([^\"]+)\";$/\\1/p" "$PACKAGE")
+  [[ $hash =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail "missing or invalid package hash: $system"
+done
+
+root_manifest=$(curl -fsSL --retry 3 "$POINTER_BASE/manifest.json")
+version=$(jq -er '.version | select(type == "string")' <<<"$root_manifest") || fail 'invalid release version'
+[[ $version =~ $VERSION_PATTERN ]] || fail "unexpected release version: $version"
+jq -e --arg version "$version" '.version == $version' <<<"$root_manifest" >/dev/null || fail 'invalid release version whitespace'
+
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)
+if [ "$current" = "$version" ] || [ "$newest" = "$current" ]; then
+  jq -nc --arg version "$current" '{update: false, version: $version}'
+  exit 0
+fi
+
+version_manifest=$(curl -fsSL --retry 3 "$RELEASE_BASE/$version/manifest.json")
+jq -e --arg version "$version" '.version == $version' <<<"$version_manifest" >/dev/null || fail 'version manifest mismatch'
+
+urls=()
+digests=()
+for target in "${targets[@]}"; do
+  file="genteam-computer-$target.gz"
+  url="$RELEASE_BASE/$version/$file"
+  digest=$(jq -er --arg target "$target" --arg file "$file" '
+    .targets[$target].gz | select(.file == $file)
+    | .sha256 | select(type == "string" and length == 64 and test("^[0-9a-f]{64}$"))
+  ' <<<"$version_manifest") || fail "invalid release asset: $target"
+  urls+=("$url")
+  digests+=("$digest")
+done
+
+hashes=()
+for i in "${!targets[@]}"; do
+  expected=$(nix hash convert --hash-algo sha256 --to sri "${digests[$i]}")
+  actual=$(nix store prefetch-file --json --hash-type sha256 "${urls[$i]}" | jq -er '.hash | select(type == "string")')
+  [[ $actual =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || fail "invalid downloaded hash: ${targets[$i]}"
+  [ "$actual" = "$expected" ] || fail "checksum mismatch: ${targets[$i]}"
+  hashes+=("$actual")
+done
+
+replacements=(-e "s|^  version = \"[^\"]+\";$|  version = \"$version\";|")
+for i in "${!systems[@]}"; do
+  replacements+=(-e "s|^    ${systems[$i]} = \"[^\"]+\";$|    ${systems[$i]} = \"${hashes[$i]}\";|")
+done
+tmp=$(mktemp "$PACKAGE.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+sed -E "${replacements[@]}" "$PACKAGE" >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$PACKAGE"
+jq -nc --arg version "$version" '{update: true, version: $version}'
