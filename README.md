@@ -9,6 +9,7 @@ This repository publishes Nix definitions, not binaries.
 | `awscli2-macos` | macOS aarch64 | AWS CLI Git tags and Apple-signed AWS installer |
 | `gencode` | Linux x86_64 | npm `@genspark/gencode-linux-x64-baseline` |
 | `genspark-cli` | Linux x86_64/aarch64 and macOS aarch64 | npm `@genspark/cli` |
+| `genteam-computer` | Linux x86_64/aarch64 and macOS aarch64 | GenTeam Computer release manifest |
 | `herdr-core` | Linux x86_64 and aarch64 | herdr-core release manifest |
 | `orca-server` | Linux x86_64 | Orca GitHub releases (`stablyai/orca`) |
 | `supabase-cli` | Linux x86_64 | Supabase CLI GitHub releases |

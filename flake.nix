@@ -23,11 +23,13 @@
               builtins.elem (nixpkgs.lib.getName package) [
                 "antigravity-cli"
                 "gencode"
+                "genteam-computer"
               ];
           };
         in
         {
           genspark-cli = pkgs.callPackage ./nix/pkgs/genspark-cli.nix { };
+          genteam-computer = pkgs.callPackage ./nix/pkgs/genteam-computer.nix { };
         }
         // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
           awscli2-macos = pkgs.callPackage ./nix/pkgs/awscli2-macos.nix { };
