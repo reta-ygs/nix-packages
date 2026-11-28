@@ -7,11 +7,11 @@
   versionCheckHook,
 }:
 let
-  version = "0.70.1";
+  version = "0.71.0";
   hashes = {
-    x86_64-linux = "sha256-P51gvPRlpK3SXpLufuWDA1d5Dkkv0pkb9vmCPq4pVMQ=";
-    aarch64-linux = "sha256-XknxWctkoCWCvFA0h9Xrge25T2fVPt9JPQ6Hdhk8xdM=";
-    aarch64-darwin = "sha256-7+s8bXdsnDg8gvFvPse+6xtj8hH9r8siLsTTKirmwnA=";
+    x86_64-linux = "sha256-s+QVqz9hwauDGOUmuybH/cqsSzmVvZShRrvjSrfmANE=";
+    aarch64-linux = "sha256-fKCrdTRCfuOmny4vxw4ZVIH/yF1Ytsk7TzwAawEZsEg=";
+    aarch64-darwin = "sha256-j+Q1yaVxlw+rt02Xfw508OkzSZI/pp+DcfaWej7UMbk=";
   };
   system = stdenvNoCC.hostPlatform.system;
   target =
